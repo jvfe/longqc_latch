@@ -12,7 +12,11 @@ from latch.types import LatchDir, LatchFile
 
 
 @small_task
-def nanoplot(read: LatchFile, output_name: str) -> LatchDir:
+def nanoplot(read: LatchFile, sample_name: str) -> LatchDir:
+
+    output_name = f"{sample_name}_prefilt"
+    if "trim" in read.local_path:
+        output_name = f"{sample_name}_postfilt"
 
     output_dir = Path(output_name).resolve()
 
@@ -21,14 +25,12 @@ def nanoplot(read: LatchFile, output_name: str) -> LatchDir:
         "--fastq",
         read.local_path,
         "--tsv_stats",
-        "--info_in_report",
-        "--no_static",
         "-o",
         output_name,
     ]
 
     try:
-        subprocess.run(_nanoplot_cmd, capture_output=True)
+        subprocess.run(_nanoplot_cmd)
     except subprocess.CalledProcessError as e:
         message(
             "error",
@@ -39,7 +41,7 @@ def nanoplot(read: LatchFile, output_name: str) -> LatchDir:
         )
         raise RuntimeError(f"NanoPlot error: {e}")
 
-    return LatchDir(str(output_dir), f"latch:///longqc/nanoplot/{output_name}")
+    return LatchDir(str(output_dir), f"latch:///longqc/{sample_name}/{output_name}")
 
 
 @small_task
@@ -87,12 +89,15 @@ def run_filtlong(
             ]
         )
 
-    output_str = [read.local_path, ">", output_filename]
+    _filtlong_cmd.extend([read.local_path])
 
-    _filtlong_cmd.extend(output_str)
+    message(
+        "info",
+        {"title": "Filtlong command", "body": f"Running {' '.join(_filtlong_cmd)}"},
+    )
 
     try:
-        subprocess.run(_filtlong_cmd)
+        proc = subprocess.run(_filtlong_cmd, capture_output=True)
     except subprocess.CalledProcessError as e:
         message(
             "error",
@@ -103,7 +108,12 @@ def run_filtlong(
         )
         raise RuntimeError(f"NanoPlot error: {e}")
 
-    return LatchFile(str(output_file), f"latch:///longqc/trimmed/{output_filename}")
+    with open(output_file, "wb") as f:
+        f.write(proc.stdout)
+
+    return LatchFile(
+        str(output_file), f"latch:///longqc/{sample_name}/{output_filename}"
+    )
 
 
 @workflow
@@ -170,7 +180,7 @@ def longqc(
           __metadata__:
             display_name: Minimum window quality threshold
     """
-    prefilt = nanoplot(read=read, output_name=f"{sample_name}_prefilt")
+    prefilt = nanoplot(read=read, sample_name=sample_name)
     trimmed = run_filtlong(
         read=read,
         sample_name=sample_name,
@@ -179,14 +189,14 @@ def longqc(
         min_mean_q=min_mean_q,
         min_window_q=min_window_q,
     )
-    postfilt = nanoplot(read=trimmed, output_name=f"{sample_name}_postfilt")
+    postfilt = nanoplot(read=trimmed, sample_name=sample_name)
 
     return [prefilt, trimmed, postfilt]
 
 
 LaunchPlan(
     longqc,
-    "MinION IBS Microbiome",
+    "MinION IBS Microbiome (SRR19142056)",
     {
         "read": LatchFile("s3://latch-public/test-data/4318/SRR19142056.fastq"),
         "sample_name": "SRR19142056",
