@@ -103,17 +103,17 @@ def run_filtlong(
         )
         raise RuntimeError(f"NanoPlot error: {e}")
 
-    return LatchFile(output_file, f"latch:///longqc/trimmed/{output_filename}")
+    return LatchFile(str(output_file), f"latch:///longqc/trimmed/{output_filename}")
 
 
 @workflow
 def longqc(
     read: LatchFile,
     sample_name: str,
+    min_mean_q: float = 25.0,
     min_length: Optional[int] = None,
     max_length: Optional[int] = None,
     min_window_q: Optional[float] = None,
-    min_mean_q: Optional[float] = 25.0,
 ) -> List[Union[LatchDir, LatchFile]]:
     """Quality control and preprocessing for long-read data
 
@@ -121,7 +121,7 @@ def longqc(
     ----
 
     __metadata__:
-        display_name: Long read QC and preprocessing
+        display_name: LongQC
         author:
             name:
             email:
@@ -173,6 +173,7 @@ def longqc(
     prefilt = nanoplot(read=read, output_name=f"{sample_name}_prefilt")
     trimmed = run_filtlong(
         read=read,
+        sample_name=sample_name,
         min_length=min_length,
         max_length=max_length,
         min_mean_q=min_mean_q,
