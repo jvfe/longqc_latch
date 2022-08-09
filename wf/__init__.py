@@ -52,10 +52,10 @@ def nanoplot(read: LatchFile, sample_name: str) -> LatchDir:
 def run_filtlong(
     read: LatchFile,
     sample_name: str,
+    min_mean_q: float,
     keep_percent: float,
     min_length: Optional[int],
     max_length: Optional[int],
-    min_mean_q: Optional[float],
     min_window_q: Optional[float],
 ) -> LatchFile:
     output_filename = f"{sample_name}_trim_final.fastq"
@@ -83,7 +83,7 @@ def run_filtlong(
         _filtlong_cmd.extend(
             [
                 "--min_length",
-                str(min_mean_q),
+                str(min_length),
             ]
         )
     if max_length is not None:
