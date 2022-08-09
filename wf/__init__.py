@@ -10,6 +10,8 @@ from latch import message, small_task, workflow
 from latch.resources.launch_plan import LaunchPlan
 from latch.types import LatchDir, LatchFile
 
+from .docs import LONGQC_DOCS
+
 
 @small_task
 def nanoplot(read: LatchFile, sample_name: str) -> LatchDir:
@@ -48,6 +50,7 @@ def nanoplot(read: LatchFile, sample_name: str) -> LatchDir:
 def run_filtlong(
     read: LatchFile,
     sample_name: str,
+    keep_percent: float,
     min_length: Optional[int],
     max_length: Optional[int],
     min_mean_q: Optional[float],
@@ -60,6 +63,13 @@ def run_filtlong(
         "filtlong",
     ]
 
+    if keep_percent is not None:
+        _filtlong_cmd.extend(
+            [
+                "--keep_percent",
+                str(keep_percent),
+            ]
+        )
     if min_mean_q is not None:
         _filtlong_cmd.extend(
             [
@@ -145,11 +155,12 @@ def run_porechop(read: LatchFile, sample_name: str) -> LatchFile:
     )
 
 
-@workflow
+@workflow(LONGQC_DOCS)
 def longqc(
     read: LatchFile,
     sample_name: str,
     min_mean_q: float = 25.0,
+    keep_percent: float = 90.0,
     min_length: Optional[int] = None,
     max_length: Optional[int] = None,
     min_window_q: Optional[float] = None,
@@ -172,56 +183,6 @@ def longqc(
     NanoPack: visualizing and processing long-read sequencing data,
     Bioinformatics, Volume 34, Issue 15, 01 August 2018, Pages 2666–2669,
     https://doi.org/10.1093/bioinformatics/bty149
-
-    __metadata__:
-        display_name: LongQC
-        author:
-            name: João Cavalcante
-            email:
-            github: github.com/jvfe
-        repository: github.com/jvfe/longqc_latch/
-        license:
-            id: MIT
-
-    Args:
-
-        read:
-          Paired-end read 1 file to be assembled.
-
-          __metadata__:
-            display_name: Read
-            section_title: Data
-
-        sample_name:
-          Sample name (Will defined output file names).
-
-          __metadata__:
-            display_name: Sample name
-
-        min_length:
-          Minimum length threshold.
-
-          __metadata__:
-            display_name: Minimum length threshold
-            section_title: FiltLong parameters
-
-        max_length:
-          Maximum length threshold.
-
-          __metadata__:
-            display_name: Maximum length threshold
-
-        min_mean_q:
-          Minimum mean quality threshold.
-
-          __metadata__:
-            display_name: Minimum mean quality threshold
-
-        min_window_q:
-          Minimum window quality threshold.
-
-          __metadata__:
-            display_name: Minimum window quality threshold
     """
     prefilt = nanoplot(read=read, sample_name=sample_name)
     trimmed = run_porechop(
@@ -235,6 +196,7 @@ def longqc(
         max_length=max_length,
         min_mean_q=min_mean_q,
         min_window_q=min_window_q,
+        keep_percent=keep_percent,
     )
     postfilt = nanoplot(read=final_trimmed, sample_name=sample_name)
 
@@ -251,5 +213,6 @@ LaunchPlan(
         "max_length": None,
         "min_window_q": None,
         "min_mean_q": 25.0,
+        "keep_percent": 90.0,
     },
 )
