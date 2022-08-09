@@ -53,7 +53,7 @@ def run_filtlong(
     min_mean_q: Optional[float],
     min_window_q: Optional[float],
 ) -> LatchFile:
-    output_filename = f"{sample_name}_trim.fastq"
+    output_filename = f"{sample_name}_trim_final.fastq"
     output_file = Path(output_filename).resolve()
 
     _filtlong_cmd = [
@@ -97,7 +97,8 @@ def run_filtlong(
     )
 
     try:
-        proc = subprocess.run(_filtlong_cmd, capture_output=True)
+        with open(output_file, "wb") as output:
+            subprocess.run(_filtlong_cmd, check=True, stdout=output)
     except subprocess.CalledProcessError as e:
         message(
             "error",
@@ -106,10 +107,38 @@ def run_filtlong(
                 "body": f"Error surfaced:\n{str(e)}",
             },
         )
-        raise RuntimeError(f"NanoPlot error: {e}")
+        raise RuntimeError(f"FiltLong error: {e}")
 
-    with open(output_file, "wb") as f:
-        f.write(proc.stdout)
+    return LatchFile(
+        str(output_file), f"latch:///longqc/{sample_name}/{output_filename}"
+    )
+
+
+@small_task
+def run_porechop(read: LatchFile, sample_name: str) -> LatchFile:
+
+    output_filename = f"{sample_name}_trim.fastq"
+    output_file = Path(output_filename).resolve()
+
+    _porechop_cmd = ["porechop", "-i", read.local_path, "-o", str(output_file)]
+
+    message(
+        "info",
+        {"title": "Porechop command", "body": f"Running {' '.join(_porechop_cmd)}"},
+    )
+
+    try:
+        subprocess.run(_porechop_cmd)
+
+    except subprocess.CalledProcessError as e:
+        message(
+            "error",
+            {
+                "title": f"Porechop error for {sample_name}",
+                "body": f"Error surfaced:\n{str(e)}",
+            },
+        )
+        raise RuntimeError(f"Porechop error: {e}")
 
     return LatchFile(
         str(output_file), f"latch:///longqc/{sample_name}/{output_filename}"
@@ -130,13 +159,27 @@ def longqc(
     LongQC
     ----
 
+    A Workflow for long read preprocessing and quality control. It's composed of:
+
+    - [NanoPlot](https://github.com/wdecoster/NanoPlot) [^1] for creating visualizations of read quality before **and**
+        after processing.
+    - [PoreChop](https://github.com/rrwick/Porechop) for trimming sequence adapters
+    - [FiltLong](https://github.com/rrwick/Filtlong) for low-quality filtering and other preprocessing.
+
+
+    [^1]: Wouter De Coster, Svenn D'Hert, Darrin T Schultz, Marc Cruts,
+    Christine Van Broeckhoven,
+    NanoPack: visualizing and processing long-read sequencing data,
+    Bioinformatics, Volume 34, Issue 15, 01 August 2018, Pages 2666–2669,
+    https://doi.org/10.1093/bioinformatics/bty149
+
     __metadata__:
         display_name: LongQC
         author:
-            name:
+            name: João Cavalcante
             email:
-            github:
-        repository:
+            github: github.com/jvfe
+        repository: github.com/jvfe/longqc_latch/
         license:
             id: MIT
 
@@ -181,17 +224,21 @@ def longqc(
             display_name: Minimum window quality threshold
     """
     prefilt = nanoplot(read=read, sample_name=sample_name)
-    trimmed = run_filtlong(
+    trimmed = run_porechop(
         read=read,
+        sample_name=sample_name,
+    )
+    final_trimmed = run_filtlong(
+        read=trimmed,
         sample_name=sample_name,
         min_length=min_length,
         max_length=max_length,
         min_mean_q=min_mean_q,
         min_window_q=min_window_q,
     )
-    postfilt = nanoplot(read=trimmed, sample_name=sample_name)
+    postfilt = nanoplot(read=final_trimmed, sample_name=sample_name)
 
-    return [prefilt, trimmed, postfilt]
+    return [prefilt, final_trimmed, postfilt]
 
 
 LaunchPlan(

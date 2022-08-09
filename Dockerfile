@@ -12,7 +12,7 @@ ENV PATH=$CONDA_DIR/bin:$PATH
 RUN conda install mamba -n base -c conda-forge
 
 # Get Macrel
-RUN mamba install -y -c bioconda filtlong
+RUN mamba install -y -c bioconda filtlong porechop
 
 RUN pip install NanoPlot
 
