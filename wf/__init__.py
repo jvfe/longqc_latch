@@ -27,6 +27,8 @@ def nanoplot(read: LatchFile, sample_name: str) -> LatchDir:
         "--fastq",
         read.local_path,
         "--tsv_stats",
+        "--no_static",
+        "--info_in_report",
         "-o",
         output_name,
     ]
